@@ -1,6 +1,4 @@
-pragma solidity ^0.4.8;
-contract tokenRecipient { function receiveApproval(address _from, uint256 _value, address _token, bytes _extraData); }
-
+pragma solidity ^0.4.2;
 contract owned {
     address public owner;
 
@@ -18,7 +16,9 @@ contract owned {
     }
 }
 
-contract MatrxToken is owned {
+contract tokenRecipient { function receiveApproval(address _from, uint256 _value, address _token, bytes _extraData); }
+
+contract token {
     /* Public variables of the token */
     string public standard = 'Token 0.1';
     string public name;
@@ -33,18 +33,13 @@ contract MatrxToken is owned {
     /* This generates a public event on the blockchain that will notify clients */
     event Transfer(address indexed from, address indexed to, uint256 value);
 
-    /* This notifies clients about the amount burnt */
-    event Burn(address indexed from, uint256 value);
-
     /* Initializes contract with initial supply tokens to the creator of the contract */
-    function MatrxToken(
+    function token(
         uint256 initialSupply,
         string tokenName,
         uint8 decimalUnits,
-        string tokenSymbol,
-        address centralMinter
-    ) {
-        if (centralMinter != 0 ) owner = centralMinter;     // Set the owner of the token
+        string tokenSymbol
+        ) {
         balanceOf[msg.sender] = initialSupply;              // Give the creator all initial tokens
         totalSupply = initialSupply;                        // Update total supply
         name = tokenName;                                   // Set the name for display purposes
@@ -54,7 +49,6 @@ contract MatrxToken is owned {
 
     /* Send coins */
     function transfer(address _to, uint256 _value) {
-        if (_to == 0x0) throw;                               // Prevent transfer to 0x0 address. Use burn() instead
         if (balanceOf[msg.sender] < _value) throw;           // Check if the sender has enough
         if (balanceOf[_to] + _value < balanceOf[_to]) throw; // Check for overflows
         balanceOf[msg.sender] -= _value;                     // Subtract from the sender
@@ -71,41 +65,106 @@ contract MatrxToken is owned {
 
     /* Approve and then communicate the approved contract in a single tx */
     function approveAndCall(address _spender, uint256 _value, bytes _extraData)
-        returns (bool success) {
+        returns (bool success) {    
         tokenRecipient spender = tokenRecipient(_spender);
         if (approve(_spender, _value)) {
             spender.receiveApproval(msg.sender, _value, this, _extraData);
             return true;
         }
-    }        
+    }
 
     /* A contract attempts to get the coins */
     function transferFrom(address _from, address _to, uint256 _value) returns (bool success) {
-        if (_to == 0x0) throw;                                // Prevent transfer to 0x0 address. Use burn() instead
         if (balanceOf[_from] < _value) throw;                 // Check if the sender has enough
         if (balanceOf[_to] + _value < balanceOf[_to]) throw;  // Check for overflows
-        if (_value > allowance[_from][msg.sender]) throw;     // Check allowance
-        balanceOf[_from] -= _value;                           // Subtract from the sender
-        balanceOf[_to] += _value;                             // Add the same to the recipient
+        if (_value > allowance[_from][msg.sender]) throw;   // Check allowance
+        balanceOf[_from] -= _value;                          // Subtract from the sender
+        balanceOf[_to] += _value;                            // Add the same to the recipient
         allowance[_from][msg.sender] -= _value;
         Transfer(_from, _to, _value);
         return true;
     }
 
-    function burn(uint256 _value) returns (bool success) {
-        if (balanceOf[msg.sender] < _value) throw;            // Check if the sender has enough
-        balanceOf[msg.sender] -= _value;                      // Subtract from the sender
-        totalSupply -= _value;                                // Updates totalSupply
-        Burn(msg.sender, _value);
+    /* This unnamed function is called whenever someone tries to send ether to it */
+    function () {
+        throw;     // Prevents accidental sending of ether
+    }
+}
+
+contract MatrxCoin is owned, token {
+
+    uint256 public sellPrice;
+    uint256 public buyPrice;
+
+    mapping (address => bool) public frozenAccount;
+
+    /* This generates a public event on the blockchain that will notify clients */
+    event FrozenFunds(address target, bool frozen);
+
+    /* Initializes contract with initial supply tokens to the creator of the contract */
+    function MatrxCoin(
+        uint256 initialSupply,
+        string tokenName,
+        uint8 decimalUnits,
+        string tokenSymbol
+    ) token (initialSupply, tokenName, decimalUnits, tokenSymbol) {}
+
+    /* Send coins */
+    function transfer(address _to, uint256 _value) {
+        if (balanceOf[msg.sender] < _value) throw;           // Check if the sender has enough
+        if (balanceOf[_to] + _value < balanceOf[_to]) throw; // Check for overflows
+        if (frozenAccount[msg.sender]) throw;                // Check if frozen
+        balanceOf[msg.sender] -= _value;                     // Subtract from the sender
+        balanceOf[_to] += _value;                            // Add the same to the recipient
+        Transfer(msg.sender, _to, _value);                   // Notify anyone listening that this transfer took place
+    }
+
+    /* A contract attempts to get the coins */
+    function transferFrom(address _from, address _to, uint256 _value) returns (bool success) {
+        if (frozenAccount[_from]) throw;                        // Check if frozen            
+        if (balanceOf[_from] < _value) throw;                 // Check if the sender has enough
+        if (balanceOf[_to] + _value < balanceOf[_to]) throw;  // Check for overflows
+        if (_value > allowance[_from][msg.sender]) throw;   // Check allowance
+        balanceOf[_from] -= _value;                          // Subtract from the sender
+        balanceOf[_to] += _value;                            // Add the same to the recipient
+        allowance[_from][msg.sender] -= _value;
+        Transfer(_from, _to, _value);
         return true;
     }
 
-    function burnFrom(address _from, uint256 _value) returns (bool success) {
-        if (balanceOf[_from] < _value) throw;                // Check if the sender has enough
-        if (_value > allowance[_from][msg.sender]) throw;    // Check allowance
-        balanceOf[_from] -= _value;                          // Subtract from the sender
-        totalSupply -= _value;                               // Updates totalSupply
-        Burn(_from, _value);
-        return true;
+    function mintToken(address target, uint256 mintedAmount) onlyOwner {
+        balanceOf[target] += mintedAmount;
+        totalSupply += mintedAmount;
+        Transfer(0, this, mintedAmount);
+        Transfer(this, target, mintedAmount);
+    }
+
+    function freezeAccount(address target, bool freeze) onlyOwner {
+        frozenAccount[target] = freeze;
+        FrozenFunds(target, freeze);
+    }
+
+    function setPrices(uint256 newSellPrice, uint256 newBuyPrice) onlyOwner {
+        sellPrice = newSellPrice;
+        buyPrice = newBuyPrice;
+    }
+
+    function buy() payable {
+        uint amount = msg.value / buyPrice;                // calculates the amount
+        if (balanceOf[this] < amount) throw;               // checks if it has enough to sell
+        balanceOf[msg.sender] += amount;                   // adds the amount to buyer's balance
+        balanceOf[this] -= amount;                         // subtracts amount from seller's balance
+        Transfer(this, msg.sender, amount);                // execute an event reflecting the change
+    }
+
+    function sell(uint256 amount) {
+        if (balanceOf[msg.sender] < amount ) throw;        // checks if the sender has enough to sell
+        balanceOf[this] += amount;                         // adds the amount to owner's balance
+        balanceOf[msg.sender] -= amount;                   // subtracts the amount from seller's balance
+        if (!msg.sender.send(amount * sellPrice)) {        // sends ether to the seller. It's important
+            throw;                                         // to do this last to avoid recursion attacks
+        } else {
+            Transfer(msg.sender, this, amount);            // executes an event reflecting on the change
+        }               
     }
 }
