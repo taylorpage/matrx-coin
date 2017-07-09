@@ -1,0 +1,22 @@
+{
+  "name": "matrx-coin",
+  "version": "1.0.0",
+  "description": "Ethereum based cryptocurrnecy written in Solidity",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/taylorpage/matrx-coin.git"
+  },
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/taylorpage/matrx-coin/issues"
+  },
+  "homepage": "https://github.com/taylorpage/matrx-coin#readme",
+  "dependencies": {
+    "solc": "^0.4.13"
+  }
+}
