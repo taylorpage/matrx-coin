@@ -15,8 +15,5 @@
   "bugs": {
     "url": "https://github.com/taylorpage/matrx-coin/issues"
   },
-  "homepage": "https://github.com/taylorpage/matrx-coin#readme",
-  "dependencies": {
-    "solc": "^0.4.13"
-  }
+  "homepage": "https://github.com/taylorpage/matrx-coin#readme"
 }
